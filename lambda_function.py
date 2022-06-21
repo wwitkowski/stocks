@@ -1,8 +1,9 @@
 import json
+import requests
 
 def lambda_handler(event, context):
-    # TODO implement
+    response = requests.get('https://api.github.com')
     return {
-        'statusCode': 200,
-        'body': json.dumps('Hello from Lambda after merge')
+        'statusCode': response.status_code,
+        'body': json.dumps(response.text)
     }
