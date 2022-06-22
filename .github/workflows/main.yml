@@ -1,7 +1,5 @@
 name: deploy to lambda
 on:
-  # Trigger the workflow on push or pull request,
-  # but only for the main branch
   push:
     branches:
       - main
@@ -22,4 +20,5 @@ jobs:
           aws_region: ${{ secrets.AWS_REGION }}
           function_name: stocks-scraper
           source: lambda_function.py
-          layers: arn:aws:lambda:us-east-1:770693421928:layer:Klayers-p38-requests:3
+          # layers not working at the moment
+          # layers: arn:aws:lambda:us-east-1:770693421928:layer:Klayers-p38-requests:3 n
