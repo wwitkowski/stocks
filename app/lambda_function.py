@@ -1,7 +1,7 @@
 import os
 import requests
 import boto3
-from table import Stocks
+from .table import Stocks
 
 dyn_resource = boto3.resource(
     'dynamodb', 
