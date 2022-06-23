@@ -1,9 +1,7 @@
-import json
+import os
 import requests
 import boto3
-import os
-from decimal import Decimal
-from botocore.exceptions import ClientError
+from table import Stocks
 
 dyn_resource = boto3.resource(
     'dynamodb', 
@@ -13,18 +11,16 @@ dyn_resource = boto3.resource(
 )
 
 def lambda_handler(event, context):
-    table = dyn_resource.Table('Stocks')
-    table.load()
     item = {
-        'date': '2022-06-22',
-        'ticker': 'TEST_LAMBDA_NOVARS',
+        'date': '2022-06-23',
+        'ticker': 'TEST',
         'p_e': 9,
         'price': 22.12
     }
-    table.put_item(
-        Item=json.loads(json.dumps(item), parse_float=Decimal)
-    )
+    table = Stocks(dyn_resource)
+    if table.exists():
+        r = table.add_item(item)
     return {
         'statusCode': '200',
-        'body': json.dumps('Successfully uploaded an item')
+        'body': r
     }
