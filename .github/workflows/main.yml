@@ -12,6 +12,10 @@ jobs:
     steps:
       - name: checkout source code
         uses: actions/checkout@v2
+      - name: zip
+        uses: montudor/action-zip@v0.1.0
+        with:
+          args: zip -qq -r ./app.zip ./
       - name: default deploy
         uses: appleboy/lambda-action@master
         with:
@@ -19,6 +23,7 @@ jobs:
           aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws_region: ${{ secrets.AWS_REGION }}
           function_name: stocks-scraper
-          source: lambda_function
+          zip_file: app.zip
+          #source: lambda_function.py
           # layers not working at the moment
           # layers: arn:aws:lambda:us-east-1:770693421928:layer:Klayers-p38-requests:3 n
