@@ -1,7 +1,6 @@
 import json
 import logging
 from decimal import Decimal
-from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
@@ -9,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class DynamoDBTable:
     table_name = None
-    
+
     """Encapsulates an Amazon DynamoDB table."""
     def __init__(self, dyn_resource):
         """
