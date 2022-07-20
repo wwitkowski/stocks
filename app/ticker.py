@@ -19,7 +19,8 @@ class TickerBase:
         self._short_info = None
         self._forward_dividends = None
         self._profile = None
-        self._upgrade_downgrade = None
+        self._recommendation_trend = None
+        self._grades_history = None
 
     def _get_stats(self):
         if self._stats:
@@ -39,20 +40,28 @@ class TickerBase:
         if 'defaultKeyStatistics' in data:
             self._short_info = {}
             for item in short_info_items:
-                self._short_info[item] = data['defaultKeyStatistics'][item]
+                self._short_info[item] = data['defaultKeyStatistics'].get(item)
 
         forward_dividends_items = ['dividendRate', 'dividendYield']
         if 'summaryDetail' in data:
             self._forward_dividends = {}
             for item in forward_dividends_items:
-                self._forward_dividends[item] = data['summaryDetail'][item]
-        
+                self._forward_dividends[item] = data['summaryDetail'].get(item)  
+
         profile_items = ['sector', 'industry', 'fullTimeEmployees']
         if 'summaryProfile' in data:
             self._profile = {}
             for item in profile_items:
-                self._profile[item] = data['summaryProfile'][item]
-        
+                self._profile[item] = data['summaryProfile'].get(item)      
+
+        if 'recommendationTrend' in data:
+            self._recommendation_trend = data['recommendationTrend'].get('trend')
+
+        if 'upgradeDowngradeHistory' in data:
+            history = data['upgradeDowngradeHistory'].get('history')
+            if isinstance(history, list):
+                self._grades_history = history[:10]
+
         self._stats = True
 
     def get_short_info(self):
@@ -65,6 +74,14 @@ class TickerBase:
 
     def get_profile(self):
         self._get_stats()
+        return self._profile
+
+    def get_recommendation_trend(self):
+        self._get_stats()
+        return self._recommendation_trend
+
+    def get_grades_history(self):
+        self._grades_history()
         return self._profile
 
 
@@ -81,6 +98,14 @@ class Ticker(TickerBase):
     @property
     def profile(self):
         return self.get_profile()
+    
+    @property
+    def recommendation_trend(self):
+        return self.get_recommendation_trend()
+
+    @property
+    def grades_history(self):
+        return self.get_grades_history()
 
 
 if __name__ == '__main__':
