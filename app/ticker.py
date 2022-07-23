@@ -29,6 +29,7 @@ class TickerBase:
         self._income_statement = None
         self._balance_sheet = None
         self._cashflow = None
+        self._analysis = None
 
     @staticmethod
     def _get_json(url):
@@ -153,6 +154,23 @@ class TickerBase:
 
         self._financials = True
 
+    def _get_analysis(self):
+        if self._analysis:
+            return
+        print('download')
+        data = self._get_json(self.ticker_url + '/analysis')
+        
+        def get_items(key, items):
+            items_dict = {item: data[key].get(item) for item in items}
+            return items_dict
+
+        self._analysis = {
+            'earningsHistory': get_items('earningsHistory', items=['history']),
+            'earningsTrend': get_items('earningsTrend', items=['trend']),
+            **get_items('financialData', items=['targetMedianPrice', 'targetMeanPrice'])
+        }
+
+
     def get_short_info(self):
         self._get_stats()
         return self._short_info
@@ -184,6 +202,10 @@ class TickerBase:
     def get_cashflow(self, freq='quarterly'):
         self._get_financials()
         return self._cashflow[freq]
+    
+    def get_analysis(self):
+        self._get_analysis()
+        return self._analysis
 
 class Ticker(TickerBase):
     
@@ -231,54 +253,14 @@ class Ticker(TickerBase):
     def annual_cashflow(self):
         return self.get_cashflow(freq='annual')
 
+    @property
+    def analysis(self):
+        return self.get_analysis()
 
 if __name__ == '__main__':
     intc = Ticker('INTC')
+    print(intc.analysis)
     print()
-
-
-# # Short    
-# data['defaultKeyStatistics']['sharesPercentSharesOut']
-# data['defaultKeyStatistics']['shortPercentOfFloat']
-# data['defaultKeyStatistics']['shortRatio']
-# # Dividends
-# data['summaryDetail']['dividendRate']
-# data['summaryDetail']['dividendYield']
-# # Profile
-# data['summaryProfile']['sector']
-# data['summaryProfile']['fullTimeEmployees']
-# data['summaryProfile']['industry']
-# # Recommendation
-# data['recommendationTrend']['trend']
-# # Upgrade - Dwongrade
-# data['upgradeDowngradeHistory']['history'][:10]
-
-# # /financials
-# https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/INTC?&region=US&symbol=INTC&type=quarterlyBasicAverageShares,querterlyTotalDebt,quarterlyFreeCashFlow&period1=493590046&period2=1658050390
-# # Income Statement
-# data['incomeStatementsHistoryQuarterly']['incomeStatementHistory'][i]['totalRevenue']
-# data['incomeStatementsHistoryQuarterly']['incomeStatementHistory'][i]['costOfRevenue']
-# data['incomeStatementsHistoryQuarterly']['incomeStatementHistory'][i]['operatingIncome']
-# data['incomeStatementsHistoryQuarterly']['incomeStatementHistory'][i]['totalOperatingExpenses']
-# data['incomeStatementsHistoryQuarterly']['incomeStatementHistory'][i]['netIncome']
-# data['incomeStatementsHistoryQuarterly']['incomeStatementHistory'][i]['ebit']
-# # Balance sheet
-# data['balanceSheetHistoryQuarterly']['balanceSheetStatements'][i]['totalAssets']
-# data['balanceSheetHistoryQuarterly']['balanceSheetStatements'][i]['totalCurrentLiabilities']
-# data['balanceSheetHistoryQuarterly']['balanceSheetStatements'][i]['totalLiab']
-# data['balanceSheetHistoryQuarterly']['balanceSheetStatements'][i]['totalStockholderEquity']
-# data['balanceSheetHistoryQuarterly']['balanceSheetStatements'][i]['cash']
-# data['balanceSheetHistoryQuarterly']['balanceSheetStatements'][i]['inventory']
-# data['balanceSheetHistoryQuarterly']['balanceSheetStatements'][i]['totalCurrentAssets']
-# # Free cashflow
-# data['cashflowStatementHistoryQuarterly']['cashflowStatements'][i]['totalCashFromOperatingActivities']
-
-
-# /analysis
-# data['earningsHistory']['history']
-# data['targetMedianPrice']
-# data['targetMeanPrice']
-# data['earningsTrend']['trend']
 
 # /history
 # url = "{}/v8/finance/chart/{}".format('https://query2.finance.yahoo.com', ticker)
