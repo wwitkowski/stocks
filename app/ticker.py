@@ -1,8 +1,12 @@
+from audioop import add
 import requests
 import json
 import logging
+from datetime import datetime
 
 _BASE_URL = 'https://finance.yahoo.com/quote'
+_ADDITIONAL_ITEMS_URL = 'https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/INTC?'\
+                        'region=US&symbol=INTC&type={items}&period1=493590046&period2={today_timestamp}'
 _HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'
 }
@@ -16,53 +20,138 @@ class TickerBase:
         self.ticker_url = f'{_BASE_URL}/{ticker}'
         self._stats = False
         self._financials = False
+        self._financials = False
         self._short_info = None
         self._forward_dividends = None
         self._profile = None
         self._recommendation_trend = None
         self._grades_history = None
+        self._income_statement = None
+        self._balance_sheet = None
+        self._cashflow = None
+
+    @staticmethod
+    def _get_json(url):
+        r = requests.get(url, headers=_HEADERS)
+        response = r.text
+        if "QuoteSummaryStore" not in response:
+            response = requests.get(url=url).text
+            if "QuoteSummaryStore" not in response:
+                return {}
+        json_str = response.split('root.App.main =')[1].split('(this)')[0].split(';\n}')[0].strip()
+        data = json.loads(json_str)['context']['dispatcher']['stores']['QuoteSummaryStore']
+        return data
 
     def _get_stats(self):
         if self._stats:
             return
-        url = self.ticker_url
-        logger.info('Downloading: %s', url)
-        response = requests.get(url, headers=_HEADERS)
-        html = response.text
-        if "QuoteSummaryStore" not in html:
-            html = requests.get(url=url).text
-            if "QuoteSummaryStore" not in html:
-                return {}
-        json_str = html.split('root.App.main =')[1].split('(this)')[0].split(';\n}')[0].strip()
-        data = json.loads(json_str)['context']['dispatcher']['stores']['QuoteSummaryStore']
+        data = self._get_json(self.ticker_url)
+        
+        def get_items(key, items):
+            items_dict = {item: data[key].get(item) for item in items}
+            return items_dict
 
-        short_info_items = ['sharesPercentSharesOut', 'shortPercentOfFloat', 'shortRatio']
-        if 'defaultKeyStatistics' in data:
-            self._short_info = {}
-            for item in short_info_items:
-                self._short_info[item] = data['defaultKeyStatistics'].get(item)
+        self._short_info = get_items(
+            'defaultKeyStatistics', 
+            ['sharesPercentSharesOut', 'shortPercentOfFloat', 'shortRatio']
+        )
+        self._forward_dividends = get_items(
+            'summaryDetail',
+            ['dividendRate', 'dividendYield']
+        )
+        self._profile = get_items(
+            'summaryProfile',
+            ['sector', 'industry', 'fullTimeEmployees']
+        )
+        self._recommendation_trend = get_items('recommendationTrend', ['trend'])
 
-        forward_dividends_items = ['dividendRate', 'dividendYield']
-        if 'summaryDetail' in data:
-            self._forward_dividends = {}
-            for item in forward_dividends_items:
-                self._forward_dividends[item] = data['summaryDetail'].get(item)  
-
-        profile_items = ['sector', 'industry', 'fullTimeEmployees']
-        if 'summaryProfile' in data:
-            self._profile = {}
-            for item in profile_items:
-                self._profile[item] = data['summaryProfile'].get(item)      
-
-        if 'recommendationTrend' in data:
-            self._recommendation_trend = data['recommendationTrend'].get('trend')
-
-        if 'upgradeDowngradeHistory' in data:
-            history = data['upgradeDowngradeHistory'].get('history')
-            if isinstance(history, list):
-                self._grades_history = history[:10]
+        history = get_items('upgradeDowngradeHistory', ['history'])
+        if isinstance(history, list):
+            self._grades_history = history[:10]
 
         self._stats = True
+
+    def _get_financials(self):
+        if self._financials:
+            return
+        data = self._get_json(self.ticker_url + '/financials')
+        additional_items = [
+            'quarterlyBasicAverageShares','quarterlyTotalDebt','annualBasicAverageShares','annualTotalDebt',
+        ]
+        url = _ADDITIONAL_ITEMS_URL.format(
+            today_timestamp=int(datetime.today().timestamp()),
+            items=','.join(additional_items))
+        additional_items = json.loads(requests.get(url, headers=_HEADERS).text)
+        for item in range(len(additional_items['timeseries']['result'])):
+            item_name = additional_items['timeseries']['result'][item]['meta']['type'][0]
+            n_periods = len(additional_items['timeseries']['result'][item][item_name])
+            for period in range(n_periods):
+                if 'quarterly' in item_name:
+                    data['balanceSheetHistoryQuarterly']['balanceSheetStatements'][period].update({
+                        item_name.replace('quarterly', ''): 
+                        additional_items['timeseries']['result'][item][item_name][n_periods-item-1]['reportedValue']
+                    })
+                else:
+                    data['balanceSheetHistory']['balanceSheetStatements'][period].update({
+                        item_name.replace('annual', ''): 
+                        additional_items['timeseries']['result'][item][item_name][n_periods-item-1]['reportedValue']
+                    })
+
+        def get_items(key, items):
+            items_dict = {}
+            if key in data:
+                second_lvl_key = list(data[key].keys())[0]
+                items_dict['annual'] = [
+                    {item: data[key][second_lvl_key][timestamp].get(item) for item in items} 
+                    for timestamp in range(len(data[key][second_lvl_key]))
+                ]
+            key += 'Quarterly'
+            if key in data:
+                second_lvl_key = list(data[key].keys())[0]
+                items_dict['quarterly'] = [
+                    {item: data[key][second_lvl_key][timestamp].get(item) for item in items} 
+                    for timestamp in range(len(data[key][second_lvl_key]))
+                ]
+            return items_dict
+
+        self._income_statement = get_items(
+            'incomeStatementHistory',
+            items=[
+                'totalRevenue', 
+                'costOfRevenue', 
+                'operatingIncome', 
+                'totalOperatingExpenses', 
+                'netIncome', 
+                'ebit',
+                'endDate'
+            ]
+        )
+
+        self._balance_sheet = get_items(
+            'balanceSheetHistory',
+            items=[
+                'totalAssets',
+                'totalCurrentLiabilities',
+                'totalLiab',
+                'totalStockholderEquity',
+                'cash',
+                'inventory',
+                'totalCurrentAssets',
+                'totalDebt',
+                'basicAverageShares',
+                'endDate'
+            ]
+        )
+
+        self._cashflow = get_items(
+            'cashflowStatementHistory',
+            items=[
+                'totalCashFromOperatingActivities', 
+                'capitalExpenditures', 
+                'endDate']
+        )
+
+        self._financials = True
 
     def get_short_info(self):
         self._get_stats()
@@ -81,9 +170,20 @@ class TickerBase:
         return self._recommendation_trend
 
     def get_grades_history(self):
-        self._grades_history()
+        self._get_stats()
         return self._profile
+    
+    def get_income_statement(self, freq='quarterly'):
+        self._get_financials()
+        return self._income_statement[freq]
 
+    def get_balance_sheet(self, freq='quarterly'):
+        self._get_financials()
+        return self._balance_sheet[freq]
+    
+    def get_cashflow(self, freq='quarterly'):
+        self._get_financials()
+        return self._cashflow[freq]
 
 class Ticker(TickerBase):
     
@@ -107,10 +207,34 @@ class Ticker(TickerBase):
     def grades_history(self):
         return self.get_grades_history()
 
+    @property
+    def quarterly_income_statement(self):
+        return self.get_income_statement()
+    
+    @property
+    def annual_income_statement(self):
+        return self.get_income_statement(freq='annual')
+
+    @property
+    def quarterly_balance_sheet(self):
+        return self.get_balance_sheet()
+
+    @property
+    def annual_balance_sheet(self):
+        return self.get_balance_sheet(freq='annual')
+
+    @property
+    def quarterly_cashflow(self):
+        return self.get_cashflow()
+
+    @property
+    def annual_cashflow(self):
+        return self.get_cashflow(freq='annual')
+
 
 if __name__ == '__main__':
     intc = Ticker('INTC')
-    print(intc.short_info)
+    print()
 
 
 # # Short    
