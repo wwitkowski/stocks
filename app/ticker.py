@@ -1,7 +1,5 @@
-from audioop import add
 import requests
 import json
-import logging
 from datetime import datetime
 
 _BASE_URL = 'https://finance.yahoo.com/quote'
@@ -10,7 +8,6 @@ _ADDITIONAL_ITEMS_URL = 'https://query2.finance.yahoo.com/ws/fundamentals-timese
 _HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'
 }
-logger = logging.getLogger(__name__)
 
 
 class TickerBase:
@@ -31,10 +28,16 @@ class TickerBase:
         self._cashflow = None
         self._analysis = None
 
+    def __repr__(self):
+        return '%s ticker.Ticker object' % self.ticker
+
     @staticmethod
-    def _get_json(url):
-        r = requests.get(url, headers=_HEADERS)
+    def _get_json(url, html=True, **kwargs):
+        r = requests.get(url, headers=_HEADERS, **kwargs)
         response = r.text
+        if not html:
+            data = json.loads(response)
+            return data
         if "QuoteSummaryStore" not in response:
             response = requests.get(url=url).text
             if "QuoteSummaryStore" not in response:
@@ -82,7 +85,7 @@ class TickerBase:
         url = _ADDITIONAL_ITEMS_URL.format(
             today_timestamp=int(datetime.today().timestamp()),
             items=','.join(additional_items))
-        additional_items = json.loads(requests.get(url, headers=_HEADERS).text)
+        additional_items = self._get_json(url, html=False)
         for item in range(len(additional_items['timeseries']['result'])):
             item_name = additional_items['timeseries']['result'][item]['meta']['type'][0]
             n_periods = len(additional_items['timeseries']['result'][item][item_name])
@@ -157,7 +160,6 @@ class TickerBase:
     def _get_analysis(self):
         if self._analysis:
             return
-        print('download')
         data = self._get_json(self.ticker_url + '/analysis')
         
         def get_items(key, items):
@@ -170,6 +172,28 @@ class TickerBase:
             **get_items('financialData', items=['targetMedianPrice', 'targetMeanPrice'])
         }
 
+    def history(self, interval='1m', range='1h', events='div,splits'):
+        url = "{}/v8/finance/chart/{}".format('https://query2.finance.yahoo.com', self.ticker)
+        params = {
+            'interval': interval,
+            'range': range,
+            'events': events
+        }
+        data = self._get_json(url, html=False, params=params)
+        data = data['chart']['result'][0]
+        ohlc = data["indicators"]["quote"][0]
+        adjclose = ohlc["close"]
+        if "adjclose" in data["indicators"]:
+            adjclose = data["indicators"]["adjclose"][0]["adjclose"]
+        return {
+            'timestamps': data["timestamp"],
+            'volumes': ohlc["volume"],
+            'opens': ohlc["open"],
+            'closes': ohlc["close"],
+            'lows': ohlc["low"],
+            'highs': ohlc["high"],
+            'adjcloses': adjclose
+        }
 
     def get_short_info(self):
         self._get_stats()
@@ -259,29 +283,4 @@ class Ticker(TickerBase):
 
 if __name__ == '__main__':
     intc = Ticker('INTC')
-    print(intc.analysis)
-    print()
-
-# /history
-# url = "{}/v8/finance/chart/{}".format('https://query2.finance.yahoo.com', ticker)
-# params = dict()
-# params["interval"] = '1d'
-# params["range"] = '1mo'
-# params["events"] = "div,splits"
-# r = requests.get(
-#     url=url,
-#     params=params,
-#     headers=headers,
-# )
-# data = json.loads(r.text)
-# timestamps = data["timestamp"]
-# ohlc = data["indicators"]["quote"][0]
-# volumes = ohlc["volume"]
-# opens = ohlc["open"]
-# closes = ohlc["close"]
-# lows = ohlc["low"]
-# highs = ohlc["high"]
-
-# adjclose = closes
-# if "adjclose" in data["indicators"]:
-#     adjclose = data["indicators"]["adjclose"][0]["adjclose"]
+    history = intc.history()
