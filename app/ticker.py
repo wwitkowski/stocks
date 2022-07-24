@@ -1,14 +1,16 @@
 import requests
 import json
+import logging
 from datetime import datetime
 
 _BASE_URL = 'https://finance.yahoo.com/quote'
 _ADDITIONAL_ITEMS_URL = 'https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/INTC?'\
-                        'region=US&symbol=INTC&type={items}&period1=493590046&period2={today_timestamp}'
+                        'region=US&symbol={ticker}&type={items}&period1=493590046&period2={today_timestamp}'
 _HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'
 }
 
+logger = logging.getLogger()
 
 class TickerBase:
 
@@ -83,12 +85,15 @@ class TickerBase:
             'quarterlyBasicAverageShares','quarterlyTotalDebt','annualBasicAverageShares','annualTotalDebt',
         ]
         url = _ADDITIONAL_ITEMS_URL.format(
+            ticker=self.ticker,
             today_timestamp=int(datetime.today().timestamp()),
             items=','.join(additional_items))
         additional_items = self._get_json(url, html=False)
         for item in range(len(additional_items['timeseries']['result'])):
             item_name = additional_items['timeseries']['result'][item]['meta']['type'][0]
-            n_periods = len(additional_items['timeseries']['result'][item][item_name])
+            n_periods = len(additional_items['timeseries']['result'][item].get(item_name, []))
+            if n_periods == 0:
+                logger.info('No %s data found.', item_name)
             for period in range(n_periods):
                 if 'quarterly' in item_name:
                     data['balanceSheetHistoryQuarterly']['balanceSheetStatements'][period].update({
