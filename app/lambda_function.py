@@ -23,12 +23,13 @@ dyn_resource = boto3.resource(
 
 def lambda_handler(event, context):
     r = requests.get('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies').text
-    tickers = re.findall(r'<a rel="nofollow" class="external text" href=.+>([A-Z]+)<.a>', r)
+    tickers = re.findall(r'<a rel="nofollow" class="external text" href=.+>([A-Z]{1,5})<.a>', r)
     today = datetime.today().strftime('%Y-%m-%d')
     items = []
-    for ticker_name in tickers:
+    tickers_len = len(tickers)
+    for i, ticker_name in enumerate(tickers):
         ticker = Ticker(ticker_name)
-        logger.info('Downloading %s ticker data', ticker_name)
+        logger.info('Downloading %s ticker data... [%d/%d]', ticker_name, i, tickers_len)
         items.append({
             'ticker': ticker_name,
             'date': today,
